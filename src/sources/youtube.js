@@ -176,8 +176,9 @@ async function _fetchVisitorData() {
     
     try {
       let parsed = data.replace(/^\)]}'\n/, '')
-      parsed = JSON.parse(cleanedData)
+      parsed = JSON.parse(parsed)
       ytContext.client.visitorData = parsed[0][2][6]
+      debugLog('youtube', 5, { type: 1, message: 'Successfully fetched visitor data: ' + ytContext.client.visitorData })
     } catch (e) { 
       debugLog('youtube', 5, { type: 2, message: `Failed to fetch visitor data: ${e.message}` })
     }
