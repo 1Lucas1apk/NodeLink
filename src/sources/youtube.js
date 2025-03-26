@@ -22,6 +22,7 @@ const ytContext = {
     screenHeightPoints: 1080,
     screenPixelDensity: 1,
     screenWidthPoints: 1920,
+    visitorData: null
   }
 }
 
@@ -158,6 +159,7 @@ async function init() {
   debugLog('youtube', 5, { type: 1, message: 'Unrecommended option "bypass age-restricted" is enabled.' })
 
   await _init()
+  await _fetchVisitorData()
 
   sourceInfo.innertubeInterval = setInterval(async () => _init(), 3600000)
 }
@@ -169,6 +171,18 @@ function free() {
   sourceInfo.signatureTimestamp = null
   sourceInfo.functions = []
 }
+async function _fetchVisitorData() {
+    const { body: data } = await makeRequest('https://www.youtube.com/sw.js_data', { method: 'GET' })
+    
+    try {
+      let parsed = data.replace(/^\)]}'\n/, '')
+      parsed = JSON.parse(cleanedData)
+      ytContext.client.visitorData = parsed[0][2][6]
+    } catch (e) { 
+      debugLog('youtube', 5, { type: 2, message: `Failed to fetch visitor data: ${e.message}` })
+    }
+}
+
 
 function checkURLType(url, type) {
   if (type === 'ytmusic') {
@@ -191,6 +205,7 @@ function checkURLType(url, type) {
     else return -1
   }
 }
+
 
 async function search(query, type, shouldLog) {
   if (!globalThis.NodeLinkSources.YouTube) {
@@ -629,7 +644,7 @@ async function retrieveStream(identifier, type, title) {
   }
 
   if (!config.search.sources.youtube.bypassAgeRestriction)
-    _switchClient(type === 'ytmusic' ? 'ANDROID_MUSIC' : 'ANDROID')
+    _switchClient(type === 'ytmusic' ? 'ANDROID_MUSIC' : 'IOS')
 
     const { body: videos } = await makeRequest(`https://${_getBaseHostRequest(type)}/youtubei/v1/player`, {
       headers: {
@@ -706,9 +721,11 @@ async function retrieveStream(identifier, type, title) {
   url += `&rn=1&cpn=${randomLetters(16)}&ratebypass=yes&range=0-` /* range query is necessary to bypass throttling */
 
   return {
-    url: videos.streamingData.hlsManifestUrl ? videos.streamingData.hlsManifestUrl : url,
-    protocol: videos.streamingData.hlsManifestUrl ? 'hls_playlist' : 'http',
-    format: audio.mimeType === 'audio/webm; codecs="opus"' ? 'webm/opus' : 'arbitrary'
+    url: url || videos.streamingData.hlsManifestUrl,
+    protocol: url ? 'http' : 'hls_playlist',
+    format: url
+      ? (audio.mimeType === 'audio/webm; codecs="opus"' ? 'webm/opus' : 'arbitrary')
+      : 'arbitrary'
   }
 }
 
