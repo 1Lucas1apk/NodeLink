@@ -4,12 +4,36 @@ import config from '../../config.js'
 import { debugLog, makeRequest, encodeTrack, http1makeRequest } from '../utils.js'
 
 let playerInfo = {}
+let TOTP_SECRET = new Uint8Array([
+  53, 53, 48, 55, 49, 52, 53, 56, 53, 51, 52, 56, 55, 52, 57, 57,
+  53, 57, 50, 50, 52, 56, 54, 51, 48, 51, 50, 57, 51, 52, 55
+])
+
+const generateTotp = () => {
+  const counter = Math.floor(Date.now() / 30000),
+        buf = Buffer.alloc(8);
+  buf.writeBigInt64BE(BigInt(counter));
+  const hmac = crypto.createHmac('sha1', TOTP_SECRET).update(buf).digest(),
+        offset = hmac[hmac.length - 1] & 15,
+        bin = ((hmac[offset] & 127) << 24) | ((hmac[offset + 1] & 255) << 16) | ((hmac[offset + 2] & 255) << 8) | (hmac[offset + 3] & 255),
+        totp = (bin % 1e6).toString().padStart(6, '0');
+  return [totp, counter * 30000];
+}
 
 /* INFO: If any part of this fails, it's likely to be an User-Agent with old browser version. */
 async function init() {
   debugLog('spotify', 5, { type: 1, message: 'Fetching token...' })
 
-  const { body: token } = await makeRequest('https://open.spotify.com/get_access_token', {
+  const [totp, timestamp] = generateTotp()
+  const totpParams = new URLSearchParams({
+    reason: "transport",
+    productType: "embed",
+    totp: totp,
+    totpVer: "5",
+    ts: timestamp.toString()
+  })
+
+  const { body: token } = await makeRequest('https://open.spotify.com/get_access_token?' + totpParams.toString(), {
     headers: {
       ...(config.search.sources.spotify.sp_dc !== 'DISABLED' ? { Cookie: `sp_dc=${config.search.sources.spotify.sp_dc}` } : {})
     },
