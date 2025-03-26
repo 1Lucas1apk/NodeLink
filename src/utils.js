@@ -170,16 +170,21 @@ function _http2Events(request, headers) {
     let data = ''
 
     request.setEncoding('utf8')
-    request.on('data', (chunk) => data += chunk)
+    request.on('data', chunk => data += chunk)
     request.on('end', () => {
-      resolve({
-        statusCode: headers[':status'],
-        headers: headers,
-        body: (headers && headers['content-type'] && headers['content-type'].startsWith('application/json')) ? JSON.parse(data) : data
-      })
+      let body = data.trim()
+      
+      if (headers?.['content-type']?.startsWith('application/json')) {
+        try { 
+          body = JSON.parse(body) 
+        } catch (_) {}
+      }
+
+      resolve({ statusCode: headers[':status'], headers, body })
     })
   })
 }
+
 
 export function makeRequest(url, options) {
   if (process.versions.deno || process.isBun) return http1makeRequest(url, options)
